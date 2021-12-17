@@ -658,6 +658,12 @@ bool hostapd_drv_nl80211(struct hostapd_data *hapd)
 }
 
 
+int hostapd_drv_wired(struct hostapd_data *hapd)
+{
+	return hapd->driver && os_strcmp(hapd->driver->name, "wired") == 0;
+}
+
+
 int hostapd_driver_scan(struct hostapd_data *hapd,
 			struct wpa_driver_scan_params *params)
 {

@@ -8,6 +8,12 @@
  * See README for more details.
  */
 
+#include <libnetlink.h>
+#include <linux/if_bridge.h>
+#include <linux/netlink.h>
+#include <linux/rtnetlink.h>
+#include <net/if.h>
+
 #include "utils/includes.h"
 
 #include "utils/common.h"
@@ -198,6 +204,62 @@ struct hostapd_vlan * vlan_add_dynamic(struct hostapd_data *hapd,
 	wpa_printf(MSG_DEBUG, "VLAN: %s(vlan_id=%d ifname=%s)",
 		   __func__, vlan_id, vlan->ifname);
 	os_strlcpy(ifname, vlan->ifname, sizeof(ifname));
+
+	if (hostapd_drv_wired(hapd)) {
+		struct rtnl_handle rth = { .fd = -1 };
+
+		n = os_zalloc(sizeof(*n));
+		if (n == NULL)
+			return NULL;
+
+		n->vlan_id = vlan_id;
+		if (vlan_desc)
+			n->vlan_desc = *vlan_desc;
+		n->dynamic_vlan = 1;
+
+		n->next = hapd->conf->vlan;
+		hapd->conf->vlan = n;
+
+		if (rtnl_open(&rth, 0) < 0) {
+			hapd->conf->vlan = n->next;
+			os_free(n);
+			return NULL;
+		}
+
+		struct {
+			struct nlmsghdr	n;
+			struct ifinfomsg	ifm;
+			char			buf[1024];
+		} req = {
+			.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct ifinfomsg)),
+			.n.nlmsg_flags = NLM_F_REQUEST,
+			.n.nlmsg_type = RTM_SETLINK,
+			.ifm.ifi_family = PF_BRIDGE,
+		};
+		struct bridge_vlan_info vinfo = {};
+		struct rtattr *afspec;
+
+		vinfo.flags = BRIDGE_VLAN_INFO_PVID |
+			      BRIDGE_VLAN_INFO_UNTAGGED;
+		vinfo.vid = vlan_id;
+
+		req.ifm.ifi_index = if_nametoindex(ifname);
+
+		afspec = addattr_nest(&req.n, sizeof(req), IFLA_AF_SPEC);
+		addattr_l(&req.n, sizeof(req), IFLA_BRIDGE_VLAN_INFO, &vinfo,
+			  sizeof(vinfo));
+		addattr_nest_end(&req.n, afspec);
+
+		if (rtnl_talk(&rth, &req.n, NULL) < 0) {
+			hapd->conf->vlan = n->next;
+			os_free(n);
+			rtnl_close(&rth);
+			return NULL;
+		}
+
+		return n;
+	}
+
 	pos = os_strchr(ifname, '#');
 	if (pos == NULL)
 		return NULL;
@@ -257,6 +319,48 @@ int vlan_remove_dynamic(struct hostapd_data *hapd, int vlan_id)
 		return 1;
 
 	if (vlan->dynamic_vlan == 0) {
+		if (hostapd_drv_wired(hapd)) {
+			struct rtnl_handle rth = { .fd = -1 };
+
+			if (rtnl_open(&rth, 0) < 0)
+				return 1;
+
+			struct {
+				struct nlmsghdr	n;
+				struct ifinfomsg	ifm;
+				char			buf[1024];
+			} req = {
+				.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct ifinfomsg)),
+				.n.nlmsg_flags = NLM_F_REQUEST,
+				.n.nlmsg_type = RTM_DELLINK,
+				.ifm.ifi_family = PF_BRIDGE,
+			};
+			struct bridge_vlan_info vinfo = {};
+			struct rtattr *afspec;
+
+			vinfo.flags = BRIDGE_VLAN_INFO_PVID |
+				BRIDGE_VLAN_INFO_UNTAGGED;
+			vinfo.vid = vlan_id;
+
+			req.ifm.ifi_index = if_nametoindex(hapd->conf->iface);
+
+			afspec = addattr_nest(&req.n, sizeof(req), IFLA_AF_SPEC);
+			addattr_l(&req.n, sizeof(req), IFLA_BRIDGE_VLAN_INFO, &vinfo,
+					sizeof(vinfo));
+			addattr_nest_end(&req.n, afspec);
+
+			if (rtnl_talk(&rth, &req.n, NULL) < 0) {
+				rtnl_close(&rth);
+				return 1;
+			}
+
+			hapd->conf->vlan = vlan->next;
+
+			os_free(vlan);
+
+			return 0;
+		}
+
 		vlan_if_remove(hapd, vlan);
 #ifdef CONFIG_FULL_DYNAMIC_VLAN
 		vlan_dellink(vlan->ifname, hapd);

@@ -1,4 +1,4 @@
-ALL=hostapd hostapd_cli
+ALL=hostapd hostapd_cli hostapd_switch.sh
 CONFIG_FILE = .config
 
 include ../src/build.rules
@@ -24,6 +24,8 @@ endif
 CFLAGS += $(EXTRA_CFLAGS)
 CFLAGS += -I$(abspath ../src)
 CFLAGS += -I$(abspath ../src/utils)
+
+LIBS += -lnetlink -lcap -lmnl
 
 export BINDIR ?= /usr/local/bin/
 
@@ -1353,6 +1355,8 @@ _OBJS_VAR := HOBJS
 include ../src/objs.mk
 _OBJS_VAR := SOBJS
 include ../src/objs.mk
+
+hostapd_switch.sh:
 
 nt_password_hash: $(NOBJS)
 	$(Q)$(CC) $(LDFLAGS) -o nt_password_hash $(NOBJS) $(LIBS_n)
