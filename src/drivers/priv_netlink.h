@@ -72,7 +72,7 @@
 #define RTA_DATA(rta) ((void *) (((char *) (rta)) + RTA_LENGTH(0)))
 #define RTA_PAYLOAD(rta) ((int) ((rta)->rta_len) - RTA_LENGTH(0))
 
-
+/*
 struct sockaddr_nl
 {
 	sa_family_t nl_family;
@@ -105,5 +105,6 @@ struct rtattr
 	unsigned short rta_len;
 	unsigned short rta_type;
 };
+*/
 
 #endif /* PRIV_NETLINK_H */

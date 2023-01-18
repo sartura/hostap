@@ -570,6 +570,11 @@ int hostapd_drv_none(struct hostapd_data *hapd)
 	return hapd->driver && os_strcmp(hapd->driver->name, "none") == 0;
 }
 
+int hostapd_drv_wired(struct hostapd_data *hapd)
+{
+	return hapd->driver && os_strcmp(hapd->driver->name, "wired") == 0;
+}
+
 
 int hostapd_driver_scan(struct hostapd_data *hapd,
 			struct wpa_driver_scan_params *params)

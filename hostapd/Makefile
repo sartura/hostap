@@ -903,7 +903,9 @@ LIBS += -lsqlite3
 LIBS_h += -lsqlite3
 endif
 
-ALL=hostapd hostapd_cli
+LIBS += -lnetlink -lmnl
+
+ALL=hostapd hostapd_cli hostapd_switch.sh
 
 all: verify_config $(ALL)
 
@@ -960,6 +962,9 @@ endif
 hostapd_cli: $(OBJS_c)
 	$(Q)$(CC) $(LDFLAGS) -o hostapd_cli $(OBJS_c) $(LIBS_c)
 	@$(E) "  LD " $@
+
+hostapd_switch.sh:
+	@$(E) "  FILE " $@
 
 NOBJS = nt_password_hash.o ../src/crypto/ms_funcs.o $(SHA1OBJS)
 NOBJS += ../src/utils/common.o
